@@ -1,4 +1,5 @@
-import { Engine, Runner, World, Bodies, Body } from "matter-js";
+/* eslint-disable @typescript-eslint/no-unused-vars */
+import Matter, { Engine, Runner, World, Bodies, Body } from "matter-js";
 import * as PIXI from "pixi.js";
 import { ORB_REGISTRY, OrbConfig } from "./OrbRegistry";
 
@@ -7,6 +8,7 @@ export class BoozeEngine {
   private app: PIXI.Application;
   private engine: Engine;
   private runner: Runner;
+  private shakePower: number = 0;
 
   private actors: {
     body: Body;
@@ -32,16 +34,19 @@ export class BoozeEngine {
   }
 
   // === CONFIGS ===
-  
   private arenaWidth: number = 0;
   private arenaHeight: number = 0;
-
   private initialImpactSpeed: number = 12; // Velocidade Y do choque frontal
   private initialChaosDeviation: number = 10; // Força do desvio aleatório no eixo X
-
+  // Game Feel (Juice)
+  private shakeDecay: number = 0.85; // Quão rápido o tremor some 
+  private wallShakeMultiplier: number = 0.6; // Aumentamos 
+  private critShakeMultiplier: number = 1.2; // Aumentamos 
 
   public async init() {
-    console.log("D-DEV-COMMANDER: BoozeEngine Inicializada. Aguardando injeção do WebGL/Matter.");
+    console.log(
+      "BoozeEngine Inicializada. Aguardando injeção do WebGL/Matter.",
+    );
 
     await this.app.init({
       resizeTo: this.container,
@@ -54,14 +59,17 @@ export class BoozeEngine {
 
     this.setupBoundaries();
     this.setupSpheres();
-    this.setupParticles(); // Corrigido: Agora o Object Pooling é inicializado
+    this.setupParticles();
+    this.setupCollisionListener();
 
     Runner.run(this.runner, this.engine);
     this.app.ticker.add(() => this.syncPhysicsToGraphics());
   }
 
   private setupParticles() {
-    console.log("D-DEV-COMMANDER: Alocando memória para 100 partículas (Object Pooling)...");
+    console.log(
+      "D-DEV-COMMANDER: Alocando memória para 100 partículas (Object Pooling)...",
+    );
     for (let i = 0; i < 100; i++) {
       const p = new PIXI.Graphics();
       p.rect(-4, -4, 8, 8).fill(0xffffff);
@@ -83,16 +91,45 @@ export class BoozeEngine {
     const wallThickness = 100;
     const options = { isStatic: true, restitution: 1.0, friction: 0 };
 
-    const top = Bodies.rectangle(cx, cy - this.arenaHeight / 2 - wallThickness / 2, this.arenaWidth + wallThickness * 2, wallThickness, options);
-    const bottom = Bodies.rectangle(cx, cy + this.arenaHeight / 2 + wallThickness / 2, this.arenaWidth + wallThickness * 2, wallThickness, options);
-    const left = Bodies.rectangle(cx - this.arenaWidth / 2 - wallThickness / 2, cy, wallThickness, this.arenaHeight + wallThickness * 2, options);
-    const right = Bodies.rectangle(cx + this.arenaWidth / 2 + wallThickness / 2, cy, wallThickness, this.arenaHeight + wallThickness * 2, options);
+    const top = Bodies.rectangle(
+      cx,
+      cy - this.arenaHeight / 2 - wallThickness / 2,
+      this.arenaWidth + wallThickness * 2,
+      wallThickness,
+      options,
+    );
+    const bottom = Bodies.rectangle(
+      cx,
+      cy + this.arenaHeight / 2 + wallThickness / 2,
+      this.arenaWidth + wallThickness * 2,
+      wallThickness,
+      options,
+    );
+    const left = Bodies.rectangle(
+      cx - this.arenaWidth / 2 - wallThickness / 2,
+      cy,
+      wallThickness,
+      this.arenaHeight + wallThickness * 2,
+      options,
+    );
+    const right = Bodies.rectangle(
+      cx + this.arenaWidth / 2 + wallThickness / 2,
+      cy,
+      wallThickness,
+      this.arenaHeight + wallThickness * 2,
+      options,
+    );
 
     World.add(this.engine.world, [top, bottom, left, right]);
 
     const arenaGraphic = new PIXI.Graphics();
     arenaGraphic
-      .rect(cx - this.arenaWidth / 2, cy - this.arenaHeight / 2, this.arenaWidth, this.arenaHeight)
+      .rect(
+        cx - this.arenaWidth / 2,
+        cy - this.arenaHeight / 2,
+        this.arenaWidth,
+        this.arenaHeight,
+      )
       .stroke({ width: 4, color: 0xffffff, alpha: 0.05 })
       .stroke({ width: 1.5, color: 0xffffff, alpha: 0.9 });
 
@@ -107,22 +144,58 @@ export class BoozeEngine {
     const configA = ORB_REGISTRY.PUFFER;
     const configB = ORB_REGISTRY.PISTON;
 
-    const sphereA = Bodies.circle(cx, cy - this.arenaHeight * 0.3, configA.radius, {
-      friction: 0, frictionAir: configA.frictionAir, restitution: configA.restitution, density: configA.density,
-    });
+    const sphereA = Bodies.circle(
+      cx,
+      cy - this.arenaHeight * 0.3,
+      configA.radius,
+      {
+        friction: 0,
+        frictionAir: configA.frictionAir,
+        restitution: configA.restitution,
+        density: configA.density,
+      },
+    );
 
-    const sphereB = Bodies.circle(cx, cy + this.arenaHeight * 0.3, configB.radius, {
-      friction: 0, frictionAir: configB.frictionAir, restitution: configB.restitution, density: configB.density,
-    });
+    const sphereB = Bodies.circle(
+      cx,
+      cy + this.arenaHeight * 0.3,
+      configB.radius,
+      {
+        friction: 0,
+        frictionAir: configB.frictionAir,
+        restitution: configB.restitution,
+        density: configB.density,
+      },
+    );
 
-    const { container: contA, graphic: viewA, hpText: textA } = this.createActorVisual(configA);
-    const { container: contB, graphic: viewB, hpText: textB } = this.createActorVisual(configB);
+    const {
+      container: contA,
+      graphic: viewA,
+      hpText: textA,
+    } = this.createActorVisual(configA);
+    const {
+      container: contB,
+      graphic: viewB,
+      hpText: textB,
+    } = this.createActorVisual(configB);
 
     this.app.stage.addChild(contA, contB);
     World.add(this.engine.world, [sphereA, sphereB]);
 
-    this.actors.push({ body: sphereA, container: contA, graphic: viewA, hpText: textA, hp: 100 });
-    this.actors.push({ body: sphereB, container: contB, graphic: viewB, hpText: textB, hp: 100 });
+    this.actors.push({
+      body: sphereA,
+      container: contA,
+      graphic: viewA,
+      hpText: textA,
+      hp: 100,
+    });
+    this.actors.push({
+      body: sphereB,
+      container: contB,
+      graphic: viewB,
+      hpText: textB,
+      hp: 100,
+    });
   }
 
   private createActorVisual(config: OrbConfig) {
@@ -155,35 +228,61 @@ export class BoozeEngine {
     const eyeRadius = radius * 0.2;
     const pupilRadius = radius * 0.08;
 
-    g.circle(-eyeOffset, eyeY, eyeRadius).fill(0xffffff); 
-    g.circle(eyeOffset, eyeY, eyeRadius).fill(0xffffff); 
-    g.circle(-eyeOffset, eyeY, pupilRadius).fill(0x000000); 
-    g.circle(eyeOffset, eyeY, pupilRadius).fill(0x000000); 
+    g.circle(-eyeOffset, eyeY, eyeRadius).fill(0xffffff);
+    g.circle(eyeOffset, eyeY, eyeRadius).fill(0xffffff);
+    g.circle(-eyeOffset, eyeY, pupilRadius).fill(0x000000);
+    g.circle(eyeOffset, eyeY, pupilRadius).fill(0x000000);
 
     return g;
   }
 
   private syncPhysicsToGraphics() {
+    // Consumo do Shake (Efeito de dissipação)
+    if (this.shakePower > 0) {
+      this.app.stage.x = (Math.random() - 0.5) * this.shakePower;
+      this.app.stage.y = (Math.random() - 0.5) * this.shakePower;
+      
+      this.shakePower *= this.shakeDecay; 
+      
+      if (this.shakePower < 0.5) { 
+        this.shakePower = 0;
+        this.app.stage.x = 0;
+        this.app.stage.y = 0;
+      }
+    }
+
     for (const actor of this.actors) {
       actor.container.x = actor.body.position.x;
       actor.container.y = actor.body.position.y;
-      actor.graphic.rotation = actor.body.angle;
+
+      // Squash & Stretch: Deforma baseado na velocidade atual
+      const speed = Math.sqrt(
+        actor.body.velocity.x ** 2 + actor.body.velocity.y ** 2,
+      );
+      const stretch = 1 + speed * 0.002;
+      const squash = 1 / stretch;
+
+      actor.graphic.scale.set(stretch, squash);
+      actor.graphic.rotation = Math.atan2(
+        actor.body.velocity.y,
+        actor.body.velocity.x,
+      );
     }
   }
 
   public startFight() {
     console.log("D-DEV-COMMANDER: Gatilho acionado. Injetando Caos...");
-    
+
     // Esfera A (Topo): Joga para baixo (+Y) com desvio X
-    Body.setVelocity(this.actors[0].body, { 
-      x: (Math.random() - 0.5) * this.initialChaosDeviation, 
-      y: this.initialImpactSpeed 
+    Body.setVelocity(this.actors[0].body, {
+      x: (Math.random() - 0.5) * this.initialChaosDeviation,
+      y: this.initialImpactSpeed,
     });
 
     // Esfera B (Base): Joga para cima (-Y) com desvio X
-    Body.setVelocity(this.actors[1].body, { 
-      x: (Math.random() - 0.5) * this.initialChaosDeviation, 
-      y: -this.initialImpactSpeed 
+    Body.setVelocity(this.actors[1].body, {
+      x: (Math.random() - 0.5) * this.initialChaosDeviation,
+      y: -this.initialImpactSpeed,
     });
   }
 
@@ -193,5 +292,53 @@ export class BoozeEngine {
     World.clear(this.engine.world, false);
     Engine.clear(this.engine);
     this.app.destroy({ removeView: true });
+  }
+
+  // * =========== GAME FEEL ==============
+  private setupCollisionListener() {
+    Matter.Events.on(this.engine, "collisionStart", (event) => {
+      event.pairs.forEach((pair) => {
+        const { bodyA, bodyB } = pair;
+
+        // Calcula a força bruta do impacto
+        const velocityA = bodyA.velocity;
+        const velocityB = bodyB.velocity;
+        const impact = Math.sqrt(
+          Math.pow(velocityA.x - velocityB.x, 2) +
+            Math.pow(velocityA.y - velocityB.y, 2),
+        );
+
+        if (impact > 5) {
+          // Se um dos corpos for estático (parede), é colisão de borda
+          const isWallCollision = bodyA.isStatic || bodyB.isStatic;
+
+          // Se for bola com bola, passamos a posição de colisão para as partículas no futuro
+          const collisionX = pair.collision.supports[0]?.x || bodyA.position.x;
+          const collisionY = pair.collision.supports[0]?.y || bodyA.position.y;
+
+          this.applyJuice(impact, isWallCollision, collisionX, collisionY);
+        }
+      });
+    });
+  }
+
+  private applyJuice(impact: number, isWallCollision: boolean, x: number, y: number) {
+    if (isWallCollision) {
+      // IMPACTO DE BORDA (Parede)
+      // Garante um tremor mínimo de 3px para não passar despercebido, limitado a 8px
+      this.shakePower = Math.min(Math.max(impact * this.wallShakeMultiplier, 3), 8); 
+    } else {
+      // IMPACTO CRÍTICO (Bola vs Bola)
+      const stopDuration = Math.min(impact * 4, 100);
+      this.engine.timing.timeScale = 0.05;
+      setTimeout(() => {
+        this.engine.timing.timeScale = 1;
+      }, stopDuration);
+
+      // Tremor violento usando o novo multiplicador (sem limite máximo artificial)
+      this.shakePower = impact * this.critShakeMultiplier;
+
+      // TODO: Partículas e Áudio
+    }
   }
 }
