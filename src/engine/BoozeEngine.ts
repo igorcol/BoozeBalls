@@ -11,7 +11,21 @@ export class BoozeEngine {
   private arenaHeight: number = 0;
 
   // Mapeamento 1:1 entre o corpo físico e a representação visual
-  private actors: { body: Body; view: PIXI.Graphics }[] = [];
+  private actors: {
+    body: Body;
+    container: PIXI.Container;
+    graphic: PIXI.Graphics;
+    hpText: PIXI.Text;
+    hp: number;
+  }[] = [];
+
+  // Partículas (Object Pooling)
+  private particles: {
+    sprite: PIXI.Graphics;
+    life: number;
+    vx: number;
+    vy: number;
+  }[] = [];
 
   constructor(container: HTMLDivElement) {
     this.container = container;
@@ -46,6 +60,20 @@ export class BoozeEngine {
 
     // Ticker de retenção (Render loop a 60/120Hz)
     this.app.ticker.add(() => this.syncPhysicsToGraphics());
+  }
+
+  private setupParticles() {
+    console.log(
+      "D-DEV-COMMANDER: Alocando memória para 100 partículas (Object Pooling)...",
+    );
+    for (let i = 0; i < 100; i++) {
+      const p = new PIXI.Graphics();
+      p.rect(-4, -4, 8, 8).fill(0xffffff);
+      p.visible = false;
+
+      this.app.stage.addChild(p);
+      this.particles.push({ sprite: p, life: 0, vx: 0, vy: 0 });
+    }
   }
 
   // * Cria limites
@@ -117,15 +145,10 @@ export class BoozeEngine {
     const { width, height } = this.app.screen;
     const cx = width / 2;
     const cy = height / 2;
-    const radius = 35; // Um pouco menor para caber bem na nova arena
+    const radius = 35;
 
-    const physicsOptions = {
-      friction: 0,
-      frictionAir: 0,
-      restitution: 1.01,
-    };
+    const physicsOptions = { friction: 0, frictionAir: 0, restitution: 1.01 };
 
-    // Posição de spawn agora é relativa à altura da arena, não da tela inteira
     const sphereA = Bodies.circle(
       cx,
       cy - this.arenaHeight * 0.3,
@@ -139,14 +162,36 @@ export class BoozeEngine {
       physicsOptions,
     );
 
-    const viewA = this.createSphereGraphic(radius, 0x00ff88);
-    const viewB = this.createSphereGraphic(radius, 0x0088ff);
+    // Cria as instâncias visuais
+    const {
+      container: contA,
+      graphic: viewA,
+      hpText: textA,
+    } = this.createActorVisual(radius, 0x00ff88);
+    const {
+      container: contB,
+      graphic: viewB,
+      hpText: textB,
+    } = this.createActorVisual(radius, 0x0088ff);
 
-    this.app.stage.addChild(viewA, viewB);
+    this.app.stage.addChild(contA, contB);
     World.add(this.engine.world, [sphereA, sphereB]);
 
-    this.actors.push({ body: sphereA, view: viewA });
-    this.actors.push({ body: sphereB, view: viewB });
+    // Registra os atores com HP inicial de 100
+    this.actors.push({
+      body: sphereA,
+      container: contA,
+      graphic: viewA,
+      hpText: textA,
+      hp: 100,
+    });
+    this.actors.push({
+      body: sphereB,
+      container: contB,
+      graphic: viewB,
+      hpText: textB,
+      hp: 100,
+    });
   }
 
   // Desenha os círculos proceduralmente sem depender de imagens
@@ -165,11 +210,11 @@ export class BoozeEngine {
   }
 
   private syncPhysicsToGraphics() {
-    // Para cada ator, copiamos a posição calculada na CPU (Matter) para a GPU (Pixi)
     for (const actor of this.actors) {
-      actor.view.x = actor.body.position.x;
-      actor.view.y = actor.body.position.y;
-      actor.view.rotation = actor.body.angle;
+      actor.container.x = actor.body.position.x;
+      actor.container.y = actor.body.position.y;
+
+      actor.graphic.rotation = actor.body.angle;
     }
   }
 
@@ -179,6 +224,26 @@ export class BoozeEngine {
     World.clear(this.engine.world, false);
     Engine.clear(this.engine);
     this.app.destroy({ removeView: true });
+  }
+
+  private createActorVisual(radius: number, color: number) {
+    const container = new PIXI.Container();
+    const graphic = this.createSphereGraphic(radius, color);
+
+    const hpText = new PIXI.Text({
+      text: "100",
+      style: {
+        fontFamily: "Arial, sans-serif",
+        fontSize: 24,
+        fontWeight: "bold",
+        fill: 0xffffff,
+      },
+    });
+    hpText.anchor.set(0.5);
+    hpText.y = 15;
+
+    container.addChild(graphic, hpText);
+    return { container, graphic, hpText };
   }
 
   // * Start Fight
