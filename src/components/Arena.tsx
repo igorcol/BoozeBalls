@@ -2,13 +2,13 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { BoozeEngine } from '@/engine/BoozeEngine';
-import { useGameStore } from '@/store/gameStore'; 
+import { BoozeEngine } from '@/engine/core/BoozeEngine';
+import { useGameStore } from '@/store/gameStore';
 
 export default function Arena() {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<BoozeEngine | null>(null);
-  const status = useGameStore((state) => state.status); 
+  const status = useGameStore((state) => state.status);
 
   useEffect(() => {
     if (!containerRef.current) return;
