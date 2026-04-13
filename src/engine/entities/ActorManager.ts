@@ -14,8 +14,6 @@ export interface Actor {
   body: Body;
   container: PIXI.Container;
   graphic: PIXI.Graphics;
-  hpText: PIXI.Text;
-  hp: number;
 }
 
 export class ActorManager {
@@ -47,37 +45,24 @@ export class ActorManager {
       friction: 0, frictionAir: configB.frictionAir, restitution: configB.restitution, density: configB.density,
     });
 
-    const { container: contA, graphic: viewA, hpText: textA } = this.createActorVisual(configA);
-    const { container: contB, graphic: viewB, hpText: textB } = this.createActorVisual(configB);
+    const { container: contA, graphic: viewA } = this.createActorVisual(configA);
+    const { container: contB, graphic: viewB } = this.createActorVisual(configB);
 
     // Despacha para os gerentes
     this.app.stage.addChild(contA, contB);
     this.physics.addBodies([sphereA, sphereB]);
 
     // Salva o estado
-    this.actors.push({ body: sphereA, container: contA, graphic: viewA, hpText: textA, hp: 100 });
-    this.actors.push({ body: sphereB, container: contB, graphic: viewB, hpText: textB, hp: 100 });
+    this.actors.push({ body: sphereA, container: contA, graphic: viewA });
+    this.actors.push({ body: sphereB, container: contB, graphic: viewB });
   }
 
   private createActorVisual(config: OrbConfig) {
     const container = new PIXI.Container();
     const graphic = this.createSphereGraphic(config.radius, config.color);
-
-    const hpText = new PIXI.Text({
-      text: "100",
-      style: {
-        fontFamily: "Arial, sans-serif",
-        fontSize: Math.max(20, config.radius * 0.5),
-        fontWeight: "bold",
-        fill: 0xffffff,
-      },
-    });
-    hpText.anchor.set(0.5);
-    hpText.y = config.radius * 0.4;
-
-    container.addChild(graphic, hpText);
-    return { container, graphic, hpText };
-  }
+    container.addChild(graphic);
+    return { container, graphic };
+}
 
   private createSphereGraphic(radius: number, color: number): PIXI.Graphics {
     const g = new PIXI.Graphics();
