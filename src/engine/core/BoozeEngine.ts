@@ -8,6 +8,7 @@ import { PhysicsSystem } from "../systems/PhysicsSystem";
 import { VFXSystem } from "../systems/VFXSystem"; 
 import { CombatSystem } from "../systems/CombatSystem"; 
 import { ActorManager } from "../entities/ActorManager"; 
+import { AudioSystem } from "../systems/AudioSystem";
 
 export class BoozeEngine {
   private container: HTMLDivElement;
@@ -18,6 +19,7 @@ export class BoozeEngine {
   private vfx: VFXSystem;
   private actors: ActorManager;
   private combat: CombatSystem; 
+  private audio: AudioSystem;
 
   constructor(container: HTMLDivElement) {
     this.container = container;
@@ -27,7 +29,9 @@ export class BoozeEngine {
     this.physics = new PhysicsSystem();
     this.vfx = new VFXSystem(this.app, this.physics.engine);
     this.actors = new ActorManager(this.app, this.physics);
-    this.combat = new CombatSystem(this.actors);
+
+    this.audio = new AudioSystem(); 
+    this.combat = new CombatSystem(this.actors, this.audio);
   }
 
   public async init() {
@@ -47,17 +51,24 @@ export class BoozeEngine {
     const arenaWidth = Math.min(width * 0.9, 450);
     const arenaHeight = Math.min(height * 0.7, 650);
 
-    // 2. Delegação de Tarefas Iniciais
+    // Delegação de Tarefas Iniciais
     this.drawArenaBorder(width / 2, height / 2, arenaWidth, arenaHeight);
     this.physics.setupBoundaries(width / 2, height / 2, arenaWidth, arenaHeight);
     this.actors.setupActors(arenaHeight);
 
-    // 3. Conexão de Eventos (O Espião avisando o VFX)
+    // Conexão de Eventos (O Espião avisando o VFX)
     this.physics.onCollision((impact, isWallCollision, x, y) => {
       this.vfx.triggerImpactJuice(impact, isWallCollision, x, y);
+      
+      // Lógica de Áudio Híbrida
+      if (isWallCollision) {
+        this.audio.playWallHit(impact);
+      } else {
+        this.audio.playActorHit(impact);
+      }
     });
 
-    // 4. Ignição
+    // Inicio
     this.physics.start();
     this.app.ticker.add(() => this.loop());
   }
@@ -89,6 +100,7 @@ export class BoozeEngine {
     this.physics.destroy();
     this.vfx.destroy();
     this.actors.destroy();
+    this.audio.destroy(); 
     this.app.destroy({ removeView: true });
   }
 }
