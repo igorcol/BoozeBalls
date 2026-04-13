@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import Matter, { Engine, Runner, World, Bodies, Body } from "matter-js";
 import * as PIXI from "pixi.js";
 import { ORB_REGISTRY, OrbConfig } from "./OrbRegistry";
@@ -39,9 +38,9 @@ export class BoozeEngine {
   private initialImpactSpeed: number = 12; // Velocidade Y do choque frontal
   private initialChaosDeviation: number = 10; // Força do desvio aleatório no eixo X
   // Game Feel (Juice)
-  private shakeDecay: number = 0.85; // Quão rápido o tremor some 
-  private wallShakeMultiplier: number = 0.6; // Aumentamos 
-  private critShakeMultiplier: number = 1.2; // Aumentamos 
+  private shakeDecay: number = 0.85; // Quão rápido o tremor some
+  private wallShakeMultiplier: number = 0.6; // Aumentamos
+  private critShakeMultiplier: number = 1.2; // Aumentamos
 
   public async init() {
     console.log(
@@ -237,25 +236,25 @@ export class BoozeEngine {
   }
 
   private syncPhysicsToGraphics() {
-    // Consumo do Shake (Efeito de dissipação)
+    // 1. Consumo do Shake (Efeito de dissipação da Câmera)
     if (this.shakePower > 0) {
       this.app.stage.x = (Math.random() - 0.5) * this.shakePower;
       this.app.stage.y = (Math.random() - 0.5) * this.shakePower;
-      
-      this.shakePower *= this.shakeDecay; 
-      
-      if (this.shakePower < 0.5) { 
+
+      this.shakePower *= this.shakeDecay;
+
+      if (this.shakePower < 0.5) {
         this.shakePower = 0;
         this.app.stage.x = 0;
         this.app.stage.y = 0;
       }
     }
 
+    // 2. Sincronização de Posição e Deformação (Squash & Stretch)
     for (const actor of this.actors) {
       actor.container.x = actor.body.position.x;
       actor.container.y = actor.body.position.y;
 
-      // Squash & Stretch: Deforma baseado na velocidade atual
       const speed = Math.sqrt(
         actor.body.velocity.x ** 2 + actor.body.velocity.y ** 2,
       );
@@ -267,6 +266,27 @@ export class BoozeEngine {
         actor.body.velocity.y,
         actor.body.velocity.x,
       );
+    }
+
+    // 3. Animação de Ciclo de Vida do Object Pooling (Partículas)
+    for (const p of this.particles) {
+      if (p.life > 0) {
+        // Move baseado no vetor de velocidade com atrito de ar (desaceleração)
+        p.sprite.x += p.vx;
+        p.sprite.y += p.vy;
+        p.vx *= 0.92;
+        p.vy *= 0.92;
+
+        p.life -= 0.04; // Decaimento da vida (morte progressiva)
+        p.sprite.alpha = p.life; // Fica transparente
+
+        // Encolhe proporcionalmente à vida (evita valores negativos que quebram o WebGL)
+        p.sprite.scale.set(Math.max(p.life, 0));
+
+        if (p.life <= 0) {
+          p.sprite.visible = false; // Desativa e devolve ao Pool
+        }
+      }
     }
   }
 
@@ -322,11 +342,19 @@ export class BoozeEngine {
     });
   }
 
-  private applyJuice(impact: number, isWallCollision: boolean, x: number, y: number) {
+  private applyJuice(
+    impact: number,
+    isWallCollision: boolean,
+    x: number,
+    y: number,
+  ) {
     if (isWallCollision) {
       // IMPACTO DE BORDA (Parede)
       // Garante um tremor mínimo de 3px para não passar despercebido, limitado a 8px
-      this.shakePower = Math.min(Math.max(impact * this.wallShakeMultiplier, 3), 8); 
+      this.shakePower = Math.min(
+        Math.max(impact * this.wallShakeMultiplier, 3),
+        8,
+      );
     } else {
       // IMPACTO CRÍTICO (Bola vs Bola)
       const stopDuration = Math.min(impact * 4, 100);
@@ -338,7 +366,33 @@ export class BoozeEngine {
       // Tremor violento usando o novo multiplicador (sem limite máximo artificial)
       this.shakePower = impact * this.critShakeMultiplier;
 
-      // TODO: Partículas e Áudio
+      // Partículas
+      const particleCount = Math.min(Math.floor(impact * 1.5), 30);
+      this.emitParticles(x, y, particleCount);
+    }
+  }
+
+  private emitParticles(x: number, y: number, amount: number) {
+    let emitted = 0;
+    for (const p of this.particles) {
+      if (p.life <= 0) {
+        // Pega apenas partículas "mortas" na memória
+        p.sprite.x = x;
+        p.sprite.y = y;
+        p.sprite.visible = true;
+        p.sprite.alpha = 1;
+
+        // Explosão radial (direções aleatórias 360º)
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 8 + 2; // Força da ejeção
+        p.vx = Math.cos(angle) * speed;
+        p.vy = Math.sin(angle) * speed;
+
+        p.life = 1.0; // Vida cheia (100%)
+        emitted++;
+
+        if (emitted >= amount) break; // Para quando ejetar a quantidade solicitada
+      }
     }
   }
 }
