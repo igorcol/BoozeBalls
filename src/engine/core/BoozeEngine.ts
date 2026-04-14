@@ -10,6 +10,7 @@ import { CombatSystem } from "../systems/CombatSystem";
 import { ActorManager } from "../entities/ActorManager";
 import { AudioSystem } from "../systems/AudioSystem";
 import { useGameStore } from "@/store/gameStore";
+import { BulgePinchFilter, CRTFilter } from "pixi-filters";
 
 export class BoozeEngine {
   private container: HTMLDivElement;
@@ -21,6 +22,7 @@ export class BoozeEngine {
   private actors: ActorManager;
   private combat: CombatSystem;
   private audio: AudioSystem;
+  private crtFilter!: CRTFilter;
 
   constructor(container: HTMLDivElement) {
     this.container = container;
@@ -108,7 +110,39 @@ export class BoozeEngine {
       },
     );
 
-    // 5. Ignição
+    // ==========================================
+    // 📺 5. POST-PROCESSING PIPELINE (SHADERS)
+    // ==========================================
+
+    // Filtro 1: Curvatura da Lente (Tubo de TV Antiga)
+    const bulgeFilter = new BulgePinchFilter({
+      center: [0.5, 0.5],
+      radius: Math.max(width, height) * 0.6, // Pega a tela toda
+      strength: 0.5, // Curvatura sutil (Valores altos distorcem demais)
+    });
+
+    // Filtro 2: Estética VHS e Scanlines
+    this.crtFilter = new CRTFilter({
+      vignetting: 0.3, // Bordas escuras
+      vignettingAlpha: 0.8,
+      lineWidth: 2, // Espessura das scanlines
+      noise: 0.25, // Granulação de VHS
+      noiseSize: 1.5,
+    });
+
+    // 🚨 A LINHA SALVADORA QUE IMPEDE O CORTE DAS BORDAS 🚨
+    this.app.stage.filterArea = this.app.screen;
+
+    // Engole o palco inteiro com os filtros na ordem correta (Bulge -> CRT -> Glitch)
+    this.app.stage.filters = [
+      bulgeFilter,
+      this.crtFilter,
+      this.vfx.glitchFilter,
+    ];
+
+    // ==========================================
+    // 6. Ignição
+    // ==========================================
     this.physics.start();
     this.app.ticker.add(() => this.loop());
   }
@@ -117,16 +151,37 @@ export class BoozeEngine {
   private loop() {
     this.actors.syncAll();
     this.vfx.update();
+
+    // Anima a estática da fita VHS a cada frame
+    if (this.crtFilter) {
+      this.crtFilter.time += 0.5;
+    }
   }
 
   // Desenhado aqui pois é puramente o cenário estático de fundo
   private drawArenaBorder(cx: number, cy: number, w: number, h: number) {
-    const arenaGraphic = new PIXI.Graphics();
-    arenaGraphic
-      .rect(cx - w / 2, cy - h / 2, w, h)
-      .stroke({ width: 4, color: 0xffffff, alpha: 0.05 })
-      .stroke({ width: 1.5, color: 0xffffff, alpha: 0.9 });
-    this.app.stage.addChildAt(arenaGraphic, 0);
+    const bgName = "arena-bg";
+    const oldGlow = this.app.stage.getChildByLabel(bgName + "-glow");
+    const oldCore = this.app.stage.getChildByLabel(bgName + "-core");
+    if (oldGlow) oldGlow.destroy();
+    if (oldCore) oldCore.destroy();
+
+    // Objeto 1: O Fundo e o Glow Neon (Grosso)
+    const glow = new PIXI.Graphics();
+    glow.label = bgName + "-glow";
+    glow.rect(cx - w / 2, cy - h / 2, w, h);
+    glow.fill({ color: 0x00ffcc, alpha: 0.05 }); // Fundo levemente neon
+    glow.stroke({ width: 16, color: 0x00ffcc, alpha: 0.35 });
+
+    // Objeto 2: O Núcleo do Laser (Branco puro)
+    const core = new PIXI.Graphics();
+    core.label = bgName + "-core";
+    core.rect(cx - w / 2, cy - h / 2, w, h);
+    core.stroke({ width: 2, color: 0xffffff, alpha: 1 });
+
+    // Adiciona na base do palco
+    this.app.stage.addChildAt(glow, 0);
+    this.app.stage.addChildAt(core, 1);
   }
 
   // Ponte para o botão do React disparar a treta

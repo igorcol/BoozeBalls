@@ -1,17 +1,22 @@
-"use client"
+'use client';
+
 import Arena from '@/components/Arena';
 import HUD from '@/components/HUD';
-import GameOver from '@/components/GameOver'; 
+import GameOver from '@/components/GameOver';
+import CRTOverlay from '@/components/CRTOverlay'; 
 import { useGameStore } from '@/store/gameStore';
 
 export default function Home() {
   const { status, startFight } = useGameStore();
 
   return (
-    <main className="relative w-screen h-screen flex flex-col items-center justify-center bg-black overflow-hidden">
+    <main className="relative w-screen h-screen flex flex-col items-center justify-center bg-[#222222] overflow-hidden">
       <Arena />
       <HUD />
       <GameOver /> 
+      
+      {/* Overlay */}
+      <CRTOverlay /> 
       
       <div className="absolute inset-0 z-10 flex flex-col items-center justify-end pb-32 pointer-events-none">
         {status === 'idle' && (

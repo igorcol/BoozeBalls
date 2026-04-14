@@ -6,6 +6,7 @@
  */
 import * as PIXI from "pixi.js";
 import { Engine } from "matter-js";
+import { GlitchFilter } from "pixi-filters";
 
 export class VFXSystem {
   private app: PIXI.Application;
@@ -20,9 +21,24 @@ export class VFXSystem {
   // Memória Pré-Alocada
   private particles: { sprite: PIXI.Graphics; life: number; vx: number; vy: number }[] = [];
 
+  // --- Filtro de Glitch
+  public glitchFilter: GlitchFilter;
+  private glitchTimer: number = 0;
+
   constructor(app: PIXI.Application, engine: Engine) {
     this.app = app;
     this.engine = engine;
+
+    // Setup do Glitch (Desligado por padrão)
+    this.glitchFilter = new GlitchFilter({
+      slices: 6,
+      offset: 15,
+      direction: 0, // Horizontal
+      fillMode: 2, // Transparent
+      average: false,
+    });
+    this.glitchFilter.enabled = false;
+
     this.setupParticles();
   }
 
@@ -41,24 +57,24 @@ export class VFXSystem {
   // O Trigger que será disparado pela Física
   public triggerImpactJuice(impact: number, isWallCollision: boolean, x: number, y: number) {
     if (isWallCollision) {
-      // Tremor microscópico de Borda
       this.shakePower = Math.min(Math.max(impact * this.wallShakeMultiplier, 3), 8);
     } else {
-      // Impacto Crítico: Hit Stop
       const stopDuration = Math.min(impact * 4, 100);
       this.engine.timing.timeScale = 0.05;
-      setTimeout(() => {
-        this.engine.timing.timeScale = 1;
-      }, stopDuration);
+      setTimeout(() => { this.engine.timing.timeScale = 1; }, stopDuration);
 
-      // Camera Shake
       this.shakePower = impact * this.critShakeMultiplier;
-
-      // Emissão de Partículas
       const particleCount = Math.min(Math.floor(impact * 1.5), 30);
       this.emitParticles(x, y, particleCount);
+
+      // 💥 NOVO: Glitch em pancadas fortes
+      if (impact > 15) {
+        this.activateGlitch(10); // 10 frames de glitch
+      }
     }
   }
+
+
 
   private emitParticles(x: number, y: number, amount: number) {
     let emitted = 0;
@@ -84,11 +100,15 @@ export class VFXSystem {
 
   // Gatilho exclusivo de Morte (Zeigarnik Reset)
   public triggerDeathJuice(x: number, y: number) {
-    // Tremor apocalíptico
     this.shakePower = 25; 
+    this.emitParticles(x, y, 60);
+    this.activateGlitch(30); // Tela rasga na morte
+  }
 
-    // Ejeção massiva de partículas (Morte)
-    this.emitParticles(x, y, 60); 
+  // Ativador de Glitch
+  private activateGlitch(frames: number) {
+    this.glitchTimer = frames;
+    this.glitchFilter.enabled = true;
   }
 
 
@@ -122,6 +142,22 @@ export class VFXSystem {
         if (p.life <= 0) {
           p.sprite.visible = false;
         }
+      }
+    }
+
+    // Resolve o Timer do Glitch
+    if (this.glitchTimer > 0) {
+      this.glitchTimer--;
+      this.glitchFilter.seed = Math.random(); // Deixa o glitch caótico a cada frame
+      this.glitchFilter.offset = Math.random() * 20 + 5;
+      
+      if (this.glitchTimer <= 0) {
+        this.glitchFilter.enabled = false;
+      }
+    } else {
+      // Glitch Passivo (0.3% de chance de dar um pulinho na tela do nada)
+      if (Math.random() < 0.003) {
+        this.activateGlitch(3);
       }
     }
   }

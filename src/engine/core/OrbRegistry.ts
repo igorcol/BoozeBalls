@@ -14,8 +14,8 @@ export interface OrbConfig {
 // DB Local de "ScriptableObjects"
 export const ORB_REGISTRY: Record<string, OrbConfig> = {
   PUFFER: {
-    id: 'PUFFER',
-    name: 'Puffer Green',
+    id: 'GREEN',
+    name: 'Green Orb',
     radius: 45,        
     color: 0x00ff88,
     restitution: 1.01, 
@@ -23,8 +23,8 @@ export const ORB_REGISTRY: Record<string, OrbConfig> = {
     density: 0.001,    
   },
   PISTON: {
-    id: 'PISTON',
-    name: 'Piston Blue',
+    id: 'BLUE',
+    name: 'Blue Orb',
     radius: 45,        
     color: 0x0088ff,
     restitution: 1.01,

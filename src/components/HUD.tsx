@@ -3,7 +3,7 @@
 import { useGameStore } from '@/store/gameStore';
 
 export default function HUD() {
-  const { hpA, hpB } = useGameStore();
+  const { hpA, hpB  } = useGameStore();
 
   return (
     <div className="absolute top-12 w-full max-w-112.5 px-6 flex justify-between items-start z-20 pointer-events-none">
