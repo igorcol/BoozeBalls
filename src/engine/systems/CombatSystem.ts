@@ -16,7 +16,7 @@ export class CombatSystem {
   // ----- Parâmetros de Injeção de Força
   private initialImpactSpeed: number = 12; // Velocidade Y do choque frontal
   private initialChaosDeviation: number = 10; // Força do desvio aleatório no eixo X
-  private damageMultiplier: number = 0.8; // Multiplicador de força -> HP
+  private damageMultiplier: number = 0.4; // Multiplicador de força -> HP
 
   // Constructor
   constructor(actorManager: ActorManager, audioSystem: AudioSystem) {
