@@ -82,6 +82,16 @@ export class VFXSystem {
     }
   }
 
+  // Gatilho exclusivo de Morte (Zeigarnik Reset)
+  public triggerDeathJuice(x: number, y: number) {
+    // Tremor apocalíptico
+    this.shakePower = 25; 
+
+    // Ejeção massiva de partículas (Morte)
+    this.emitParticles(x, y, 60); 
+  }
+
+
   // O motor visual que rodará a cada frame
   public update() {
     // Resolve o Tremor
@@ -115,6 +125,7 @@ export class VFXSystem {
       }
     }
   }
+
 
   public destroy() {
     this.particles = [];

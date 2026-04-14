@@ -14,14 +14,16 @@ export interface Actor {
   body: Body;
   container: PIXI.Container;
   graphic: PIXI.Graphics;
+  hp: number;
+  isDead: boolean; 
 }
 
 export class ActorManager {
   private app: PIXI.Application;
   private physics: PhysicsSystem;
-  
+
   // Exposto publicamente para que o CombatSystem possa aplicar forças (startFight)
-  public actors: Actor[] = []; 
+  public actors: Actor[] = [];
 
   constructor(app: PIXI.Application, physics: PhysicsSystem) {
     this.app = app;
@@ -38,23 +40,31 @@ export class ActorManager {
     const configB = ORB_REGISTRY.PISTON;
 
     const sphereA = Bodies.circle(cx, cy - arenaHeight * 0.3, configA.radius, {
-      friction: 0, frictionAir: configA.frictionAir, restitution: configA.restitution, density: configA.density,
+      friction: 0,
+      frictionAir: configA.frictionAir,
+      restitution: configA.restitution,
+      density: configA.density,
     });
 
     const sphereB = Bodies.circle(cx, cy + arenaHeight * 0.3, configB.radius, {
-      friction: 0, frictionAir: configB.frictionAir, restitution: configB.restitution, density: configB.density,
+      friction: 0,
+      frictionAir: configB.frictionAir,
+      restitution: configB.restitution,
+      density: configB.density,
     });
 
-    const { container: contA, graphic: viewA } = this.createActorVisual(configA);
-    const { container: contB, graphic: viewB } = this.createActorVisual(configB);
+    const { container: contA, graphic: viewA } =
+      this.createActorVisual(configA);
+    const { container: contB, graphic: viewB } =
+      this.createActorVisual(configB);
 
     // Despacha para os gerentes
     this.app.stage.addChild(contA, contB);
     this.physics.addBodies([sphereA, sphereB]);
 
     // Salva o estado
-    this.actors.push({ body: sphereA, container: contA, graphic: viewA });
-    this.actors.push({ body: sphereB, container: contB, graphic: viewB });
+    this.actors.push({ body: sphereA, container: contA, graphic: viewA, hp: 100, isDead: false });
+    this.actors.push({ body: sphereB, container: contB, graphic: viewB, hp: 100, isDead: false });
   }
 
   private createActorVisual(config: OrbConfig) {
@@ -62,7 +72,7 @@ export class ActorManager {
     const graphic = this.createSphereGraphic(config.radius, config.color);
     container.addChild(graphic);
     return { container, graphic };
-}
+  }
 
   private createSphereGraphic(radius: number, color: number): PIXI.Graphics {
     const g = new PIXI.Graphics();
@@ -84,9 +94,24 @@ export class ActorManager {
   // Roda a cada frame (chamado pelo Orquestrador)
   public syncAll() {
     for (const actor of this.actors) {
+      // CHECAGEM DE MORTE (Animação de Implosão)
+      if (actor.isDead) {
+        // Encolhe o sprite gradativamente (efeito de vácuo/implosão)
+        actor.graphic.scale.x *= 0.85; 
+        actor.graphic.scale.y *= 0.85;
+        
+        // Continua mapeando o X/Y por segurança
+        actor.container.x = actor.body.position.x;
+        actor.container.y = actor.body.position.y;
+        
+        continue; // Pula a lógica de Squash & Stretch normal
+      }
+
+      // SINCRONIZAÇÃO NORMAL (Atores Vivos)
       actor.container.x = actor.body.position.x;
       actor.container.y = actor.body.position.y;
 
+      // Squash & Stretch: Deforma baseado na velocidade atual
       const speed = Math.sqrt(
         actor.body.velocity.x ** 2 + actor.body.velocity.y ** 2,
       );
@@ -94,10 +119,33 @@ export class ActorManager {
       const squash = 1 / stretch;
 
       actor.graphic.scale.set(stretch, squash);
+      
+      // Rotaciona a entidade na direção do movimento
       actor.graphic.rotation = Math.atan2(
         actor.body.velocity.y,
         actor.body.velocity.x,
       );
+    }
+  }
+
+  public resetPositions(arenaHeight: number) {
+    const { width, height } = this.app.screen;
+    const cx = width / 2;
+    const cy = height / 2;
+
+    for (let i = 0; i < 2; i++) {
+      const actor = this.actors[i];
+      const startY = i === 0 ? cy - arenaHeight * 0.3 : cy + arenaHeight * 0.3;
+      
+      // Reset de Física
+      Body.setPosition(actor.body, { x: cx, y: startY });
+      Body.setVelocity(actor.body, { x: 0, y: 0 });
+      Body.setAngularVelocity(actor.body, 0);
+      actor.body.isSensor = false; // Tira o modo fantasma
+      
+      // Reset de Vida e Visual
+      actor.isDead = false;
+      actor.graphic.scale.set(1); // Volta pro tamanho original
     }
   }
 

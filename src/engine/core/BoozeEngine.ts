@@ -1,7 +1,7 @@
 /**
  * Core: BoozeEngine (O Orquestrador)
- * Responsabilidade: Inicializa a GPU e a CPU e conecta os sistemas.
- * Este arquivo NÃO contém lógica de jogo, apenas delega tarefas aos Managers.
+ * Responsabilidade: Inicializa a GPU e a CPU, conecta os sistemas e
+ * escuta o estado global (Zustand) para reset e slow-motion.
  */
 import * as PIXI from "pixi.js";
 import { PhysicsSystem } from "../systems/PhysicsSystem";
@@ -9,6 +9,7 @@ import { VFXSystem } from "../systems/VFXSystem";
 import { CombatSystem } from "../systems/CombatSystem";
 import { ActorManager } from "../entities/ActorManager";
 import { AudioSystem } from "../systems/AudioSystem";
+import { useGameStore } from "@/store/gameStore";
 
 export class BoozeEngine {
   private container: HTMLDivElement;
@@ -29,7 +30,6 @@ export class BoozeEngine {
     this.physics = new PhysicsSystem();
     this.vfx = new VFXSystem(this.app, this.physics.engine);
     this.actors = new ActorManager(this.app, this.physics);
-
     this.audio = new AudioSystem();
     this.combat = new CombatSystem(this.actors, this.audio);
   }
@@ -51,7 +51,7 @@ export class BoozeEngine {
     const arenaWidth = Math.min(width * 0.9, 450);
     const arenaHeight = Math.min(height * 0.7, 650);
 
-    // Delegação de Tarefas Iniciais
+    // 2. Delegação de Tarefas Iniciais
     this.drawArenaBorder(width / 2, height / 2, arenaWidth, arenaHeight);
     this.physics.setupBoundaries(
       width / 2,
@@ -61,7 +61,40 @@ export class BoozeEngine {
     );
     this.actors.setupActors(arenaHeight);
 
-    // Conexão de Eventos
+    // 3. O Maestro Ouve o React (Zustand) para Reset e Efeitos de K.O.
+    useGameStore.subscribe((state, prevState) => {
+      // Voltou pro idle (clique no botão Rematch)
+      if (state.status === "idle" && prevState.status === "finished") {
+        this.actors.resetPositions(arenaHeight);
+      }
+
+      // Alguém morreu (Câmera lenta dramática e Implosão)
+      if (state.status === "finished" && prevState.status === "fighting") {
+        // Descobre quem foi o defunto
+        const loserIndex = state.hpA <= 0 ? 0 : 1;
+        const loser = this.actors.actors[loserIndex];
+
+        // 1. Marca como morto (Inicia a animação de implosão no ActorManager)
+        loser.isDead = true;
+
+        // 2. Transforma em fantasma (isSensor = true faz a bola parar de bater nas paredes/adversário)
+        loser.body.isSensor = true;
+
+        // 3. Explosão visual massiva
+        this.vfx.triggerDeathJuice(
+          loser.body.position.x,
+          loser.body.position.y,
+        );
+
+        // 4. Matrix Time (Fica em câmera lenta por 1.5s enquanto o React se prepara)
+        this.physics.engine.timing.timeScale = 0.1;
+        setTimeout(() => {
+          this.physics.engine.timing.timeScale = 1;
+        }, 1500);
+      }
+    });
+
+    // 4. Conexão de Eventos (O Espião avisando o VFX, Áudio e Combate)
     this.physics.onCollision(
       (impact, isWallCollision, x, y, bodyA, bodyB, normal) => {
         this.vfx.triggerImpactJuice(impact, isWallCollision, x, y);
@@ -75,7 +108,7 @@ export class BoozeEngine {
       },
     );
 
-    // Inicio
+    // 5. Ignição
     this.physics.start();
     this.app.ticker.add(() => this.loop());
   }
@@ -96,12 +129,12 @@ export class BoozeEngine {
     this.app.stage.addChildAt(arenaGraphic, 0);
   }
 
-  // Ponte para o botão do React (Zustand) disparar
+  // Ponte para o botão do React disparar a treta
   public startFight() {
     this.combat.startFight();
   }
 
-  // Prevenção de Memory Leak
+  // Prevenção de Memory Leak absoluta
   public destroy() {
     console.log("D-DEV-COMMANDER: Desmontando Orquestrador e Sistemas...");
     this.physics.destroy();
