@@ -4,10 +4,10 @@
  * Este arquivo NÃO contém lógica de jogo, apenas delega tarefas aos Managers.
  */
 import * as PIXI from "pixi.js";
-import { PhysicsSystem } from "../systems/PhysicsSystem"; 
-import { VFXSystem } from "../systems/VFXSystem"; 
-import { CombatSystem } from "../systems/CombatSystem"; 
-import { ActorManager } from "../entities/ActorManager"; 
+import { PhysicsSystem } from "../systems/PhysicsSystem";
+import { VFXSystem } from "../systems/VFXSystem";
+import { CombatSystem } from "../systems/CombatSystem";
+import { ActorManager } from "../entities/ActorManager";
 import { AudioSystem } from "../systems/AudioSystem";
 
 export class BoozeEngine {
@@ -18,7 +18,7 @@ export class BoozeEngine {
   private physics: PhysicsSystem;
   private vfx: VFXSystem;
   private actors: ActorManager;
-  private combat: CombatSystem; 
+  private combat: CombatSystem;
   private audio: AudioSystem;
 
   constructor(container: HTMLDivElement) {
@@ -30,7 +30,7 @@ export class BoozeEngine {
     this.vfx = new VFXSystem(this.app, this.physics.engine);
     this.actors = new ActorManager(this.app, this.physics);
 
-    this.audio = new AudioSystem(); 
+    this.audio = new AudioSystem();
     this.combat = new CombatSystem(this.actors, this.audio);
   }
 
@@ -53,20 +53,27 @@ export class BoozeEngine {
 
     // Delegação de Tarefas Iniciais
     this.drawArenaBorder(width / 2, height / 2, arenaWidth, arenaHeight);
-    this.physics.setupBoundaries(width / 2, height / 2, arenaWidth, arenaHeight);
+    this.physics.setupBoundaries(
+      width / 2,
+      height / 2,
+      arenaWidth,
+      arenaHeight,
+    );
     this.actors.setupActors(arenaHeight);
 
-    // Conexão de Eventos (O Espião avisando o VFX)
-    this.physics.onCollision((impact, isWallCollision, x, y) => {
-      this.vfx.triggerImpactJuice(impact, isWallCollision, x, y);
-      
-      // Lógica de Áudio Híbrida
-      if (isWallCollision) {
-        this.audio.playWallHit(impact);
-      } else {
-        this.audio.playActorHit(impact);
-      }
-    });
+    // Conexão de Eventos
+    this.physics.onCollision(
+      (impact, isWallCollision, x, y, bodyA, bodyB, normal) => {
+        this.vfx.triggerImpactJuice(impact, isWallCollision, x, y);
+
+        if (isWallCollision) {
+          this.audio.playWallHit(impact);
+        } else {
+          this.audio.playActorHit(impact);
+          this.combat.processImpact(impact, bodyA, bodyB, normal);
+        }
+      },
+    );
 
     // Inicio
     this.physics.start();
@@ -100,7 +107,7 @@ export class BoozeEngine {
     this.physics.destroy();
     this.vfx.destroy();
     this.actors.destroy();
-    this.audio.destroy(); 
+    this.audio.destroy();
     this.app.destroy({ removeView: true });
   }
 }

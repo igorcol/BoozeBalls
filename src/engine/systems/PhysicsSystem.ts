@@ -6,7 +6,15 @@
  */
 import Matter, { Engine, Runner, World, Bodies, Body } from "matter-js";
 
-export type CollisionCallback = (impact: number, isWallCollision: boolean, x: number, y: number, bodyA: Body, bodyB: Body) => void;
+export type CollisionCallback = (
+  impact: number, 
+  isWallCollision: boolean, 
+  x: number, 
+  y: number, 
+  bodyA: Body, 
+  bodyB: Body, 
+  normal: { x: number, y: number } 
+) => void;
 
 export class PhysicsSystem {
   public engine: Engine;
@@ -60,10 +68,12 @@ export class PhysicsSystem {
           const isWallCollision = bodyA.isStatic || bodyB.isStatic;
           const collisionX = pair.collision.supports[0]?.x || bodyA.position.x;
           const collisionY = pair.collision.supports[0]?.y || bodyA.position.y;
+          
+          // Matter.js dá a direção exata da batida
+          const normal = pair.collision.normal; 
 
-          // Avisa todos os sistemas que se inscreveram
           this.collisionListeners.forEach(listener => 
-            listener(impact, isWallCollision, collisionX, collisionY, bodyA, bodyB)
+            listener(impact, isWallCollision, collisionX, collisionY, bodyA, bodyB, normal) 
           );
         }
       });
